@@ -17,6 +17,44 @@ import { getSandbox } from '@cloudflare/sandbox';
 const sandbox = getSandbox(binding, sandboxId, options?: SandboxOptions);
 ```
 
+### useWebSocket
+
+**Type**: `boolean`
+**Default**: `false`
+
+Enable WebSocket transport to reduce sub-request count by multiplexing SDK operations over a single WebSocket connection. When enabled, all SDK operations use WebSocket messages instead of individual HTTP requests.
+
+<TypeScriptExample>
+```ts
+// Enable WebSocket transport for high-volume operations
+const sandbox = getSandbox(env.Sandbox, 'batch-processor', {
+  useWebSocket: true
+});
+
+// All operations use the same WebSocket connection
+for (let i = 0; i < 100; i++) {
+  await sandbox.exec(`process-item-${i}.sh`);
+}
+// Only 1 sub-request (WebSocket upgrade) instead of 100 HTTP requests
+```
+</TypeScriptExample>
+
+**Benefits**:
+- **Reduced sub-requests** - Only the initial WebSocket upgrade counts as a sub-request
+- **Better for high volume** - Ideal when performing many operations per Worker request
+- **Transparent** - Works with all SDK methods without code changes
+
+**When to use**:
+- Your Worker performs many sandbox operations per request
+- You are approaching Workers sub-request limits
+- You need sequences of operations on the same sandbox
+
+**When not to use**:
+- Simple use cases with only a few operations per request
+- You are well under sub-request limits
+
+Learn more in the [WebSocket Transport concept guide](/sandbox/concepts/websocket-transport/).
+
 ### keepAlive
 
 **Type**: `boolean`
