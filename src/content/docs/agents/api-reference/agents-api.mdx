@@ -801,6 +801,17 @@ class AIChatAgent<Env = unknown, State = unknown> extends Agent<Env, State> {
   // Array of chat messages for the current conversation
   messages: Message[];
 
+  // Chat processing mode: "sequential" (default) or "batch"
+  chatProcessingMode: "sequential" | "batch";
+
+  // Idle timeout in milliseconds for batch mode (default: 5000ms)
+  // How long to wait after a message is sent before processing
+  chatIdleTimeout: number;
+
+  // Typing timeout in milliseconds for batch mode (default: 1500ms)
+  // How long to wait after user stops typing before processing
+  chatTypingTimeout: number;
+
   // Handle incoming chat messages and generate a response
   // onFinish is called when the response is complete
   async onChatMessage(
@@ -865,6 +876,138 @@ class CustomerSupportAgent extends AIChatAgent<Env> {
 
 </TypeScriptExample>
 
+#### Chat Processing Modes
+
+`AIChatAgent` supports two different modes for handling multiple incoming messages:
+
+- **`"sequential"`** (default): Process each message one-by-one. Each message gets its own response. Messages are queued and processed in order, waiting for each response to fully complete before the next.
+- **`"batch"`**: Combine multiple rapid messages into one response. Uses debounce timing and optional typing indicators to batch messages together, which is better for conversational UX where users send multiple short messages in quick succession.
+
+##### Sequential Mode
+
+Sequential mode is the default behavior. Each message is processed independently and receives its own response:
+
+<TypeScriptExample>
+
+```ts
+import { AIChatAgent } from "agents/ai-chat-agent";
+
+class MyAgent extends AIChatAgent<Env> {
+  // Sequential mode is the default - no configuration needed
+  chatProcessingMode = "sequential"; // Optional: explicitly set sequential mode
+
+  async onChatMessage(onFinish) {
+    // Each message will be processed one at a time
+    // User sends: "Hello"
+    // Agent responds: "Hi there!"
+    // User sends: "How are you?"
+    // Agent responds: "I'm doing well, thanks for asking!"
+  }
+}
+```
+
+</TypeScriptExample>
+
+##### Batch Mode
+
+Batch mode combines multiple rapid messages into a single response. This is useful when users type multiple short messages in quick succession:
+
+<TypeScriptExample>
+
+```ts
+import { AIChatAgent } from "agents/ai-chat-agent";
+
+class MyAgent extends AIChatAgent<Env> {
+  // Enable batch mode
+  chatProcessingMode = "batch";
+
+  // Optional: Configure batching timeout (default: 5000ms)
+  chatIdleTimeout = 3000; // 3 seconds
+
+  async onChatMessage(onFinish) {
+    // Multiple messages will be batched together
+    // User sends: "Hello"
+    // User sends: "How are you?"
+    // User sends: "What can you help me with?"
+    // Agent responds once to all three messages combined
+  }
+}
+```
+
+</TypeScriptExample>
+
+##### Typing-Aware Batching
+
+For even better UX, you can use typing indicators to intelligently delay responses until the user stops typing. This provides two-phase timing:
+
+- **`chatIdleTimeout`**: How long to wait for the user to start typing after sending a message (default: 5000ms)
+- **`chatTypingTimeout`**: How long to wait after the user stops typing before processing (default: 1500ms)
+
+<TypeScriptExample>
+
+```ts
+import { AIChatAgent } from "agents/ai-chat-agent";
+
+class MyAgent extends AIChatAgent<Env> {
+  chatProcessingMode = "batch";
+  chatIdleTimeout = 5000;  // 5 seconds to start typing
+  chatTypingTimeout = 1500; // 1.5 seconds after typing stops
+
+  async onChatMessage(onFinish) {
+    // Agent waits for user to finish typing before responding
+    // This creates a natural conversational flow
+  }
+}
+```
+
+</TypeScriptExample>
+
+To enable typing indicators on the client side, use the `onInputChange` handler from `useAgentChat`:
+
+<TypeScriptExample>
+
+```tsx
+import { useAgentChat } from "agents/ai-react";
+import { useAgent } from "agents/react";
+import { useState } from "react";
+
+function ChatInterface() {
+  const agent = useAgent({ agent: "my-agent", name: "user-123" });
+
+  const {
+    messages,
+    sendMessage,
+    onInputChange // New: typing indicator handler
+  } = useAgentChat({ agent });
+
+  const [input, setInput] = useState("");
+
+  const handleInputChange = (e) => {
+    setInput(e.target.value);
+    // Send typing indicator to agent
+    onInputChange(e);
+  };
+
+  return (
+    <div>
+      <input
+        value={input}
+        onChange={handleInputChange}
+        placeholder="Type your message..."
+      />
+    </div>
+  );
+}
+```
+
+</TypeScriptExample>
+
+**When to use each mode:**
+
+- Use **sequential mode** when each message should be treated independently, such as commands, queries, or when you want to provide feedback for every message
+- Use **batch mode** when users tend to send multiple related messages quickly, such as in conversational chat, brainstorming sessions, or when users are providing multi-part information
+- Use **typing-aware batching** for the most natural conversational experience, where the agent waits for the user to finish their complete thought before responding
+
 ### Chat Agent React API
 
 #### useAgentChat
@@ -905,6 +1048,8 @@ function useAgentChat(options: UseAgentChatOptions): {
   setInput: React.Dispatch<React.SetStateAction<string>>;
   // Handle input changes
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  // Send typing indicators to the agent (for batch mode with typing-aware batching)
+  onInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   // Submit the current input
   handleSubmit: (event?: { preventDefault?: () => void }, chatRequestOptions?: any) => void;
   // Additional metadata
