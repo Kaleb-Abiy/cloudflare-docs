@@ -1,0 +1,123 @@
+---
+title: Migrating to image variants
+pcx_content_type: how-to
+sidebar:
+  order: 13
+---
+
+Starting with version 0.5.6, the Sandbox SDK offers two optimized Docker image variants to reduce image size and improve cold start performance. This guide helps you migrate existing projects.
+
+## What changed
+
+The default Docker image no longer includes Python. Two variants are now available:
+
+| Image | Size | Python Support | Use Case |
+|-------|------|----------------|----------|
+| `cloudflare/sandbox:version` | ~617 MB | No | Shell commands, JavaScript/TypeScript, file operations |
+| `cloudflare/sandbox:version-python` | ~1.22 GB | Yes | Python code execution, data science, matplotlib |
+
+**Size improvements**:
+- Default image: 62% smaller (617 MB vs 1.64 GB)
+- Python image: 26% smaller (1.22 GB vs 1.64 GB)
+
+## Migration steps
+
+### If you use Python code execution
+
+If your application uses `sandbox.runCode()` with Python code, update your Dockerfile:
+
+**Before**:
+```dockerfile
+FROM docker.io/cloudflare/sandbox:0.5.5
+```
+
+**After**:
+```dockerfile
+FROM docker.io/cloudflare/sandbox:0.5.6-python
+```
+
+### If you only use JavaScript/TypeScript or shell commands
+
+No changes required. The default image continues to work:
+
+```dockerfile
+FROM docker.io/cloudflare/sandbox:0.5.6
+```
+
+## Error handling
+
+If you attempt to execute Python code without the `-python` variant, you will receive a clear error:
+
+```typescript
+const result = await sandbox.runCode('print("hello")', { language: 'python' });
+
+if (result.error) {
+  // Error code: PYTHON_NOT_AVAILABLE (HTTP 501)
+  // Message: "Python is not available in this container image.
+  //          Use cloudflare/sandbox:0.5.6-python image variant."
+}
+```
+
+## Choosing the right variant
+
+Use this decision tree:
+
+1. **Do you execute Python code with `sandbox.runCode()`?**
+   - Yes → Use `-python` variant
+   - No → Continue to question 2
+
+2. **Do you only execute JavaScript/TypeScript code or shell commands?**
+   - Yes → Use default variant (lean)
+   - Mixed Python + JS → Use `-python` variant
+
+## Custom images
+
+If you extend the base image, update your Dockerfile base:
+
+**For Python workloads**:
+```dockerfile
+FROM docker.io/cloudflare/sandbox:0.5.6-python
+
+RUN pip install --no-cache-dir \
+    scikit-learn==1.3.0 \
+    transformers==4.30.0
+```
+
+**For non-Python workloads**:
+```dockerfile
+FROM docker.io/cloudflare/sandbox:0.5.6
+
+RUN npm install -g typescript prettier
+```
+
+## Deployment
+
+After updating your Dockerfile:
+
+1. **Local development**:
+   ```sh
+   npm run dev
+   ```
+   Docker will rebuild the image with the new variant.
+
+2. **Production deployment**:
+   ```sh
+   npx wrangler deploy
+   ```
+   Wrangler will build and push the updated image.
+
+## Rollback
+
+If you need to rollback, use the previous image version:
+
+```dockerfile
+FROM docker.io/cloudflare/sandbox:0.5.5
+```
+
+The 0.5.5 image includes Python by default.
+
+## Related resources
+
+- [Dockerfile reference](/sandbox/configuration/dockerfile/) - Complete image variant documentation
+- [Code Interpreter API](/sandbox/api/interpreter/) - Python code execution details
+- [Wrangler configuration](/sandbox/configuration/wrangler/) - Container configuration options
